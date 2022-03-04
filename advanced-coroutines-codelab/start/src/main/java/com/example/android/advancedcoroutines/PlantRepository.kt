@@ -43,10 +43,10 @@ class PlantRepository private constructor(
      * Fetch a list of sorted [Plant]s from the database.
      * Returns a LiveData-wrapped List of Plants.
      */
-    val plants: LiveData<List<Plant>> = liveData<List<Plant>> {
-        val plantsLiveData = plantDao.getPlants()
-        val customSortOrder = plantsListSortOrderCache.getOrAwait()
-        emitSource(plantsLiveData.map {
+    val plants = liveData { // livedata builder
+        val plantsLiveData = plantDao.getPlants() // plants list
+        val customSortOrder = plantsListSortOrderCache.getOrAwait() // sort order
+        emitSource(plantsLiveData.map { // emitSource() removes any existing source, similar to mediator addSource()
                 plantList -> plantList.applySort(customSortOrder)
         })
     }
