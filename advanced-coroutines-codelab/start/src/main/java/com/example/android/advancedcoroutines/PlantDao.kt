@@ -36,7 +36,7 @@ interface PlantDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(plants: List<Plant>)
-    
+
     @Query("SELECT * from plants ORDER BY name")
     fun getPlantsFlow(): Flow<List<Plant>>
 
