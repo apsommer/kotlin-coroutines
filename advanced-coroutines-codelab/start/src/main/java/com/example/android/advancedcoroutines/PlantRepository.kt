@@ -83,6 +83,12 @@ class PlantRepository private constructor(
             .combine(customSortFlow) { plants, sortOrder ->
                 plants.applySort(sortOrder)
             }
+            // The operator flowOn launches a new coroutine to collect the
+            // flow above it and introduces a buffer to write the results.
+            // You can control the buffer with more operators, such as conflate
+            // which says to store only the last value produced in the buffer.
+            .flowOn(defaultDispatcher)
+            .conflate() // appropriate for ui observers
 
     fun getPlantsWithGrowZoneFlow(growZoneNumber: GrowZone): Flow<List<Plant>> {
         return plantDao.getPlantsWithGrowZoneNumberFlow(growZoneNumber.number)
@@ -93,11 +99,14 @@ class PlantRepository private constructor(
 
         // alternate syntax to create flow with single function
         private val customSortFlow = plantsListSortOrderCache::getOrAwait.asFlow()
+
+            // You can use onStart to run suspending code before a flow runs. It can even emit extra
+            // values into the flow, so you could use it to emit a Loading state on a network request flow.
             .onStart {
                 emit(listOf())
-                delay(1500)
+                delay(1500) // illustration of onStart
             }
-    
+
     /**
      * Returns true if we should make a network request.
      */
