@@ -18,8 +18,7 @@ package com.example.android.advancedcoroutines
 
 import androidx.lifecycle.*
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 /**
@@ -94,13 +93,24 @@ class PlantListViewModel internal constructor(
         }
     }.asLiveData()
 
+    // Using Flow, it's natural to collect data in the ViewModel, Repository,
+    // or other data layers when needed.
+    // Since Flow is not tied to the UI, you don't need a UI observer to
+    // collect a flow. This is a big difference from LiveData which always
+    // requires a UI-observer to run. It is not a good idea to try to observe
+    // a LiveData in your ViewModel because it doesn't have an appropriate
+    // observation lifecycle.
     init {
-
-        // When creating a new ViewModel, clear the grow zone and perform any related udpates
         clearGrowZoneNumber()
-
-        // fetch the full plant list
-        launchDataLoad { plantRepository.tryUpdateRecentPlantsCache() }
+        growZoneFlow
+            .mapLatest { growZone ->
+                _spinner.value = true
+                if (growZone == NoGrowZone) { plantRepository.tryUpdateRecentPlantsCache() }
+                else { plantRepository.tryUpdateRecentPlantsForGrowZoneCache(growZone) }
+            }
+            .onEach {  _spinner.value = false } // called whenever flow above emits
+            .catch { throwable ->  _snackbar.value = throwable.message } // catch exceptions thrown above
+            .launchIn(viewModelScope) // collect flow in here in viewmodel
     }
 
     /**
@@ -112,9 +122,9 @@ class PlantListViewModel internal constructor(
     fun setGrowZoneNumber(num: Int) {
         growZone.value = GrowZone(num)
         growZoneFlow.value = GrowZone(num)
-        launchDataLoad {
-            plantRepository.tryUpdateRecentPlantsForGrowZoneCache(GrowZone(num))
-        }
+//        launchDataLoad {
+//            plantRepository.tryUpdateRecentPlantsForGrowZoneCache(GrowZone(num))
+//        }
     }
 
     /**
@@ -126,9 +136,9 @@ class PlantListViewModel internal constructor(
     fun clearGrowZoneNumber() {
         growZone.value = NoGrowZone
         growZoneFlow.value = NoGrowZone
-        launchDataLoad {
-            plantRepository.tryUpdateRecentPlantsCache()
-        }
+//        launchDataLoad {
+//            plantRepository.tryUpdateRecentPlantsCache()
+//        }
     }
 
     /**
