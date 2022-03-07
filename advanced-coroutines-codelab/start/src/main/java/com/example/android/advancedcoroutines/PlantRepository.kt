@@ -90,6 +90,7 @@ class PlantRepository private constructor(
             .flowOn(defaultDispatcher)
             .conflate() // appropriate for ui observers
 
+    // contrast above concurrent combine(), with sequential map()
     fun getPlantsWithGrowZoneFlow(growZoneNumber: GrowZone): Flow<List<Plant>> {
         return plantDao.getPlantsWithGrowZoneNumberFlow(growZoneNumber.number)
             .map { plantList ->
