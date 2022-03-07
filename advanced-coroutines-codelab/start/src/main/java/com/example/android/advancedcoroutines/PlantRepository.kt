@@ -25,7 +25,8 @@ import com.example.android.advancedcoroutines.util.CacheOnSuccess
 import com.example.android.advancedcoroutines.utils.ComparablePair
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 
 /**
@@ -42,6 +43,11 @@ class PlantRepository private constructor(
     private val plantService: NetworkService,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
+
+    private var plantsListSortOrderCache =
+        CacheOnSuccess(onErrorFallback = { listOf<String>() }) {
+            plantService.customPlantSortOrder()
+        }
 
     /**
      * LiveData
@@ -67,11 +73,31 @@ class PlantRepository private constructor(
      */
     val plantsFlow: Flow<List<Plant>>
         get() = plantDao.getPlantsFlow()
+            // When the result of customSortFlow is available,
+            // this will combine it with the latest value from
+            // the flow above.  Thus, as long as both `plants`
+            // and `sortOrder` have an initial value (their
+            // flow has emitted at least one value), any change
+            // to either `plants` or `sortOrder`  will call
+            // `plants.applySort(sortOrder)`.
+            .combine(customSortFlow) { plants, sortOrder ->
+                plants.applySort(sortOrder)
+            }
 
     fun getPlantsWithGrowZoneFlow(growZoneNumber: GrowZone): Flow<List<Plant>> {
         return plantDao.getPlantsWithGrowZoneNumberFlow(growZoneNumber.number)
     }
 
+    // request sort order from network and emit result
+    private val customSortFlowAlternate = flow { emit(plantsListSortOrderCache.getOrAwait()) }
+
+        // alternate syntax to create flow with single function
+        private val customSortFlow = plantsListSortOrderCache::getOrAwait.asFlow()
+            .onStart {
+                emit(listOf())
+                delay(1500)
+            }
+    
     /**
      * Returns true if we should make a network request.
      */
@@ -115,11 +141,6 @@ class PlantRepository private constructor(
         val plants = plantService.plantsByGrowZone(growZone)
         plantDao.insertAll(plants)
     }
-
-    private var plantsListSortOrderCache =
-        CacheOnSuccess(onErrorFallback = { listOf<String>() }) {
-            plantService.customPlantSortOrder()
-        }
 
     private fun List<Plant>.applySort(customSortOrder: List<String>): List<Plant> {
         return sortedBy { plant ->
