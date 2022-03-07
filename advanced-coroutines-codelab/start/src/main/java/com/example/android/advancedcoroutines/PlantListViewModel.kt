@@ -18,6 +18,8 @@ package com.example.android.advancedcoroutines
 
 import androidx.lifecycle.*
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -51,13 +53,10 @@ class PlantListViewModel internal constructor(
         get() = _spinner
 
     /**
-     * The current growZone selection.
+     * LiveData
      */
     private val growZone = MutableLiveData<GrowZone>(NoGrowZone)
 
-    /**
-     * LiveData
-     */
     val plants: LiveData<List<Plant>> = growZone.switchMap { growZone ->
         if (growZone == NoGrowZone) {
             plantRepository.plants
@@ -71,8 +70,29 @@ class PlantListViewModel internal constructor(
      *
      * .asLiveData() converts Flow to LiveData with timeout. Configuration change is handled:
      *  if observation occurs before timeout then flow continues, else flow canceled.
+     *
+     * MutableStateFlow is very similar to LiveData in that it holds only the single, latest value.
      */
-    val plantsUsingFlow: LiveData<List<Plant>> = plantRepository.plantsFlow.asLiveData()
+    private val growZoneFlow = MutableStateFlow<GrowZone>(NoGrowZone)
+
+    /**
+     * StateFlow is different from a regular flow created using, for example, the flow{} builder.
+     * A StateFlow is created with an initial value and keeps its state even without being collected
+     * and between subsequent collections. You can use the MutableStateFlow interface (as shown above)
+     * to change the value (state) of a StateFlow.
+
+     * You will often find that flows that behave like StateFlow are called hot, as opposed to regular,
+     * cold flows which only execute when they're collected.
+     *
+     * Flow's flatMapLatest extensions allow you to switch between multiple flows.
+     */
+    val plantsUsingFlow: LiveData<List<Plant>> = growZoneFlow.flatMapLatest { growZone ->
+        if (growZone == NoGrowZone) {
+            plantRepository.plantsFlow
+        } else {
+            plantRepository.getPlantsWithGrowZoneFlow(growZone)
+        }
+    }.asLiveData()
 
     init {
 
@@ -91,9 +111,10 @@ class PlantListViewModel internal constructor(
      */
     fun setGrowZoneNumber(num: Int) {
         growZone.value = GrowZone(num)
-
-        // initial code version, will move during flow rewrite
-        launchDataLoad { plantRepository.tryUpdateRecentPlantsCache() }
+        growZoneFlow.value = GrowZone(num)
+        launchDataLoad {
+            plantRepository.tryUpdateRecentPlantsForGrowZoneCache(GrowZone(num))
+        }
     }
 
     /**
@@ -104,9 +125,10 @@ class PlantListViewModel internal constructor(
      */
     fun clearGrowZoneNumber() {
         growZone.value = NoGrowZone
-
-        // initial code version, will move during flow rewrite
-        launchDataLoad { plantRepository.tryUpdateRecentPlantsCache() }
+        growZoneFlow.value = NoGrowZone
+        launchDataLoad {
+            plantRepository.tryUpdateRecentPlantsCache()
+        }
     }
 
     /**
