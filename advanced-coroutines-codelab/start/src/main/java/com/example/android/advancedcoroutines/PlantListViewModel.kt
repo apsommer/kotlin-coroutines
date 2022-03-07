@@ -102,12 +102,19 @@ class PlantListViewModel internal constructor(
     // observation lifecycle.
     init {
         clearGrowZoneNumber()
-        growZoneFlow
-            .mapLatest { growZone ->
-                _spinner.value = true
-                if (growZone == NoGrowZone) { plantRepository.tryUpdateRecentPlantsCache() }
-                else { plantRepository.tryUpdateRecentPlantsForGrowZoneCache(growZone) }
-            }
+        loadDataFor(growZoneFlow) {
+            if (it == NoGrowZone) { plantRepository.tryUpdateRecentPlantsCache() }
+            else { plantRepository.tryUpdateRecentPlantsForGrowZoneCache(it) }
+        }
+    }
+
+    fun <T> loadDataFor(
+        source: StateFlow<T>,
+        block: suspend (T) -> Unit) {
+
+        _spinner.value = true
+        source
+            .mapLatest(block)
             .onEach {  _spinner.value = false } // called whenever flow above emits
             .catch { throwable ->  _snackbar.value = throwable.message } // catch exceptions thrown above
             .launchIn(viewModelScope) // collect flow in here in viewmodel
@@ -122,9 +129,6 @@ class PlantListViewModel internal constructor(
     fun setGrowZoneNumber(num: Int) {
         growZone.value = GrowZone(num)
         growZoneFlow.value = GrowZone(num)
-//        launchDataLoad {
-//            plantRepository.tryUpdateRecentPlantsForGrowZoneCache(GrowZone(num))
-//        }
     }
 
     /**
@@ -136,13 +140,10 @@ class PlantListViewModel internal constructor(
     fun clearGrowZoneNumber() {
         growZone.value = NoGrowZone
         growZoneFlow.value = NoGrowZone
-//        launchDataLoad {
-//            plantRepository.tryUpdateRecentPlantsCache()
-//        }
     }
 
     /**
-     * Return true iff the current list is filtered.
+     * Return true if the current list is filtered.
      */
     fun isFiltered() = growZone.value != NoGrowZone
 
